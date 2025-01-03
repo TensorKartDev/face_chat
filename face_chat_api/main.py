@@ -155,16 +155,39 @@ async def recognize_face(file: UploadFile = File(...)):
         results = table.search(embedding.tolist()).limit(1).to_list()
         
         print("results:",len(results))
-        print(results[0]['image_path'])
+        
+        print("best match found",results[0]["label"])
         if len(results) > 0:
             best_match = results[0]
-            print("best match found",best_match["score"])
-            return {"label": best_match["label"], "similarity": best_match["score"]}
+            
+            return {"label": results[0]["label"]}
         else:
             return {"label": "Unknown", "similarity": 0.0}
 
     except Exception as e:
         return {"error": str(e)}
+
+import re
+
+def extract_username(image_path):
+    """
+    Extracts the username from the given image path.
+
+    Parameters:
+        image_path (str): The image path string containing the username.
+
+    Returns:
+        str: The extracted username or None if no match is found.
+    """
+    # Regular expression pattern to match a username (e.g., "ashish", "shraddha")
+    # assuming usernames are alphanumeric and part of the path.
+    pattern = r"/(\w+?)/"  # Matches the first directory in the path
+
+    match = re.search(pattern, image_path)
+    if match:
+        return match.group(1)  # Return the matched username
+    return None  # Return None if no username is found
+
 # @app.post("/recognize-face/")
 # async def recognize_face_endpoint(file: UploadFile = File(...)):
 #     """Endpoint to recognize a face from an uploaded image."""
