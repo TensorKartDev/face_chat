@@ -12,8 +12,30 @@ import io
 from PIL import Image
 from services.llm import speak
 from typing import List
-
+import lancedb
+import torch
+from torchvision import transforms
+from PIL import Image
+from facenet_pytorch import InceptionResnetV1
 app = FastAPI()
+if torch.backends.mps.is_available():
+    device = torch.device("mps")  # Use Metal Performance Shaders for Apple Silicon
+    print("Using Metal (MPS) backend for Apple Silicon.")
+elif torch.cuda.is_available():
+    device = torch.device("cuda")  # Use CUDA for NVIDIA GPUs
+    print("Using CUDA backend.")
+else:
+    device = torch.device("cpu")  # Default to CPU
+    print("Using CPU backend.")
+
+# Initialize the model
+model = InceptionResnetV1(pretrained="vggface2").eval().to(device)
+
+preprocess = transforms.Compose([
+    transforms.Resize((160, 160)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+])
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,75 +75,98 @@ async def preflight_options():
     return {
         "message": "Preflight request handled."
     }
+# Global conversation history
+conversation_history = []
+
 @app.post("/participant-response")
 async def participant_response(request: MessageRequest):
     """
-    Handles a user message and generates an AI response.
+    Handles a user message and generates an AI response using conversation history as context.
     """
     global conversation_history
 
-    # Extract user message
     user_message = request.message
 
-    system_prompt = (
-    "You are a thoughtful, observant, and conversational individual at an . "
-    "Engage in meaningful and natural conversations, showing genuine curiosity and interest. "
-    "Your responses should feel human, relatable, and insightful, focusing on connecting through shared thoughts or experiences. "
-    "Do not overly assist or guide; instead, participate as someone enjoying a conversation with others. "
-    "Avoid emoticons or overly formal language, keeping the tone authentic and friendly."
-)
+    # Add the user's message to the conversation history
+    conversation_history.append({"role": "user", "content": user_message})
 
-    # Construct the message structure for the model
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_message},
-    ]
+    # Prepare system prompt
+    system_prompt = (
+        "You are a thoughtful, observant, and conversational individual in a friendly gathering. "
+        "You are provided with the conversation history to ensure continuity and to remember details like names or key points discussed earlier. "
+        "Engage in meaningful, natural conversations, showing genuine curiosity and interest. "
+        "Focus on building connections through shared thoughts and experiences. "
+        "Your responses should be human-like, relatable, and insightful. Avoid overly formal language, emoticons, or excessive assistance. "
+        "Use the conversation history to make your responses relevant and engaging."
+    )
+
+    # Construct the message structure
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history to the context
+    messages.extend(conversation_history)
+
+    # Add the current user message
+    messages.append({"role": "user", "content": user_message})
 
     try:
         # Call the AI model
-        model = "wizardlm2"  # Replace with your actual model name
-        response = speak(messages, model)  # Call the speak function to get AI response
+        model = "mistral-nemo"  # Replace with your actual model name
+        response = speak(messages, model)  # Call the speak function
         generated_message = response.get("content", "")
 
-        # Append to conversation history
-        conversation_history.append({
-            "speaker": "User",
-            "message": user_message
-        })
-        conversation_history.append({
-            "speaker": "AI",
-            "message": generated_message
-        })
+        # Add AI response to the conversation history
+        conversation_history.append({"role": "AI", "content": generated_message})
 
         return {
             "response": generated_message,
-            "conversation_history": conversation_history
+            "conversation_history": conversation_history,
         }
 
     except Exception as e:
-        # Log and handle errors
         error_message = f"Error generating response: {str(e)}"
         print(error_message)
-        conversation_history.append({
-            "speaker": "System",
-            "message": error_message
-        })
+        conversation_history.append({"role": "system", "content": error_message})
         raise HTTPException(status_code=500, detail=error_message)
 
-@app.post("/recognize-face/")
+@app.post("/recognize-face")
 async def recognize_face(file: UploadFile = File(...)):
-    # Save the uploaded file temporarily
-    temp_file_path = f"/tmp/{file.filename}"
-    with open(temp_file_path, "wb") as f:
-        f.write(await file.read())
+    """
+    Recognize a face by matching against the embeddings in LanceDB.
+    """
+    try:
+        # Load the image
+        print("file recieved for recognition ...")
+        image = Image.open(file.file).convert("RGB")
+        img_tensor = preprocess(image).unsqueeze(0).to(device)
+        print("Image preprocessed ...")
+        # Generate embedding
+        with torch.no_grad():
+            embedding = model(img_tensor).squeeze().cpu().numpy()
+            print("embedding generated for this captured image...")
 
-    # Add your face recognition logic here
-    # For now, return a placeholder response
-    return {"message": f"Received file {file.filename}"}
-@app.post("/recognize-face/")
-async def recognize_face_endpoint(file: UploadFile = File(...)):
-    """Endpoint to recognize a face from an uploaded image."""
-    image_bytes = await file.read()
-    image = io.BytesIO(image_bytes)
-    person = recognize_face(image)
-    return JSONResponse(content={"name": person})
+        # Perform vector search in LanceDB
+        db = lancedb.connect("./lance_faces")
+        table = db.open_table("faces")
+        print("lancedb table opened...")
+        print("Table schema:", table.schema)
+        print("Total rows in table:", len(table))
+        print("Query embedding dimensions:", len(embedding))
+        results = table.search(embedding.tolist()).n(1).execute()
+        print("results:",len(results))
+        if len(results) > 0:
+            best_match = results[0]
+            print("best match found",best_match["score"])
+            return {"label": best_match["label"], "similarity": best_match["score"]}
+        else:
+            return {"label": "Unknown", "similarity": 0.0}
+
+    except Exception as e:
+        return {"error": str(e)}
+# @app.post("/recognize-face/")
+# async def recognize_face_endpoint(file: UploadFile = File(...)):
+#     """Endpoint to recognize a face from an uploaded image."""
+#     image_bytes = await file.read()
+#     image = io.BytesIO(image_bytes)
+#     person = recognize_face(image)
+#     return JSONResponse(content={"name": person})

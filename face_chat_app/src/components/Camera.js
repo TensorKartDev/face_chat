@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
+import { FaCamera, FaMicrophone, FaStop } from "react-icons/fa"; // ReactIcons for UI
+
 let recognition;
 
 const Camera = ({ onRecognition }) => {
@@ -10,6 +12,7 @@ const Camera = ({ onRecognition }) => {
     const videoRef = useRef(null); // Reference to the <video> element
     const canvasRef = useRef(null); // Reference to the <canvas> element
     const mediaStreamRef = useRef(null); // Store the combined video/audio stream
+    const [speaking, setSpeaking] = useState(false);
     const [listening, setListening] = useState(false); // Indicates if speech recognition is active
     const [username, setUsername] = useState("User"); // Placeholder for user identification
 
@@ -196,7 +199,13 @@ const Camera = ({ onRecognition }) => {
             console.error("Speech synthesis not supported in this browser.");
         }
     };
-
+    const stopSpeaking = () => {
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            setSpeaking(false);
+            console.log("Speech stopped.");
+        }
+    };
     useEffect(() => {
         console.log("Camera component mounted.");
         return () => stopCameraAndMicrophone(); // Cleanup on unmount
@@ -260,6 +269,9 @@ const Camera = ({ onRecognition }) => {
                             Capture Image
                         </button>
                         <button onClick={stopCameraAndMicrophone}>Stop Camera</button>
+                        <button onClick={stopSpeaking} disabled={!speaking}>
+                            <FaStop /> Stop Speaking
+                        </button>
                     </div>
                 )}
             </div>

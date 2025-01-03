@@ -29,7 +29,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
+lance_faces
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

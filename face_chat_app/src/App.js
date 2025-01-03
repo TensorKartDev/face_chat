@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Camera from "./components/Camera";
-
+import axios from "axios";
 function App() {
     const [recognizedName, setRecognizedName] = useState(""); // Stores the recognized name
     const [responseMessage, setResponseMessage] = useState(""); // To display API responses or errors
@@ -8,36 +8,44 @@ function App() {
     // Handle the recognized name or file from the Camera component
     const handleRecognition = async (file) => {
         console.log("Image file received for recognition:", file);
-
+    
         if (!file) {
             setResponseMessage("No file captured for recognition.");
             return;
         }
-
+    
         // Prepare form data for the API call
         const formData = new FormData();
         formData.append("file", file);
-
+    
         try {
-            // Call the backend API for face recognition
-            const response = await fetch("http://localhost:8000/recognize-face/", {
-                method: "POST",
-                body: formData,
+            // Call the backend API for face recognition using axios
+            console.log("Calling API...");
+            const response = await axios.post("http://localhost:8000/recognize-face", formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data", // Set content type for form data
+                },
             });
-
-            if (!response.ok) {
-                throw new Error(`API returned status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log("API Response:", data);
-
+    
+            console.log("API Response:", response.data);
+    
             // Update recognized name from API response
-            setRecognizedName(data.name || "Unknown");
+            setRecognizedName(response.data.name || "Unknown");
             setResponseMessage(""); // Clear any previous error messages
         } catch (error) {
             console.error("Error recognizing face:", error);
-            setResponseMessage("Failed to recognize face. Please try again.");
+    
+            // Provide a user-friendly error message
+            if (error.response) {
+                console.error("API Error Response:", error.response.data);
+                setResponseMessage(error.response.data?.error || "Failed to recognize face. Please try again.");
+            } else if (error.request) {
+                console.error("No response received from API:", error.request);
+                setResponseMessage("No response received from the server. Please try again later.");
+            } else {
+                console.error("Error setting up request:", error.message);
+                setResponseMessage("An error occurred. Please try again.");
+            }
         }
     };
 
