@@ -152,8 +152,10 @@ async def recognize_face(file: UploadFile = File(...)):
         print("Table schema:", table.schema)
         print("Total rows in table:", len(table))
         print("Query embedding dimensions:", len(embedding))
-        results = table.search(embedding.tolist()).n(1).execute()
+        results = table.search(embedding.tolist()).limit(1).to_list()
+        
         print("results:",len(results))
+        print(results[0]['image_path'])
         if len(results) > 0:
             best_match = results[0]
             print("best match found",best_match["score"])

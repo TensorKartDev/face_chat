@@ -13,7 +13,7 @@ const FaceRecognition = ({ image, onRecognition }) => {
         formData.append("file", image);
 
         try {
-            const res = await axios.post("http://localhost:8000/recognize-face/", formData, {
+            const res = await axios.post("http://localhost:8000/recognize-face", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
             const recognizedName = res.data.name || "Unknown";

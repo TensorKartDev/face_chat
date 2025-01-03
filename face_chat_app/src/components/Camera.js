@@ -2,7 +2,6 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { FaCamera, FaMicrophone, FaStop } from "react-icons/fa"; // ReactIcons for UI
-
 let recognition;
 
 const Camera = ({ onRecognition }) => {
@@ -243,6 +242,24 @@ const Camera = ({ onRecognition }) => {
                         border: "1px solid #ccc",
                     }}
                 />
+                <canvas ref={canvasRef} style={{ display: "none" }} />
+                {/* Thumbnail Preview */}
+                {preview && (
+                    <img
+                        src={preview}
+                        alt="Preview"
+                        style={{
+                            position: "absolute",
+                            bottom: "10px",
+                            right: "10px",
+                            width: "100px",
+                            height: "100px",
+                            objectFit: "cover",
+                            border: "2px solid #fff",
+                            borderRadius: "5px",
+                        }}
+                    />
+                )}
                 {!streaming && (
                     <button
                         onClick={startCameraAndMicrophone}
