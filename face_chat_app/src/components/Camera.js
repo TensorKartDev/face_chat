@@ -280,17 +280,7 @@ const Camera = ({ onRecognition }) => {
                         Start Camera & Microphone
                     </button>
                 )}
-                {streaming && (
-                    <div style={{ marginTop: "10px" }}>
-                        <button onClick={captureImage} style={{ marginRight: "10px" }}>
-                            Capture Image
-                        </button>
-                        <button onClick={stopCameraAndMicrophone}>Stop Camera</button>
-                        <button onClick={stopSpeaking} disabled={!speaking}>
-                            <FaStop /> Stop Speaking
-                        </button>
-                    </div>
-                )}
+                
             </div>
 
             {/* Transcriptions Section */}
@@ -304,6 +294,17 @@ const Camera = ({ onRecognition }) => {
                 }}
             >
                 <div>
+                {streaming && (
+                    <div style={{ marginTop: "10px" }}>
+                        <button onClick={captureImage} style={{ marginRight: "10px" }}>
+                            Capture Image
+                        </button>
+                        <button onClick={stopCameraAndMicrophone}>Stop Camera</button>
+                        <button onClick={stopSpeaking} disabled={!speaking}>
+                            <FaStop /> Stop Speaking
+                        </button>
+                    </div>
+                )}
                     {transcriptions.length === 0 ? (
                         <p>No words transcribed yet.</p>
                     ) : (

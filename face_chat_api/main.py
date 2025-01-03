@@ -160,7 +160,7 @@ async def recognize_face(file: UploadFile = File(...)):
         if len(results) > 0:
             best_match = results[0]
             
-            return {"label": results[0]["label"]}
+            return {"name": results[0]["label"]}
         else:
             return {"label": "Unknown", "similarity": 0.0}
 
