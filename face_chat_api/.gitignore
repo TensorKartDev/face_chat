@@ -1,0 +1,99 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.code-workspace
+paddle_detection/*
+face_chat_env/
+# Virtual environments
+.venv/
+face_chat_env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.idea/
+
+personas/
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.*
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Static files
+staticfiles/
+mediafiles/
+
+# FastAPI-specific
+*.log
+*.pid
+instance/
+app.db
+app.sqlite
+*.sqlite3
+local_settings.py
+secrets.json
+
+# Docker
+docker-compose.override.yml
+.env
+.env.*
+.envrc
+Dockerfile
+*.dockerenv
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# Pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Sphinx documentation
+docs/_build/
+
+# Pytest
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pylint
+.pylint.d/
+aidebate/
+*.mp3
