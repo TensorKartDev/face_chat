@@ -34,20 +34,24 @@ const Camera = ({ onRecognition }) => {
 
                 if (newName !== "Unknown") {
                     await greetUser(newName);
+                    recognizedName = newName
                 }
             }
         } catch (error) {
             console.error("Error recognizing face:", error);
         }
     };
+    const addTranscription = (role, text) => {
+        setTranscriptions((prev) => [
+            ...prev,
+            { username: role === "user" ? recognizedName : "AI Model", text },
+        ]);
+    };
     const greetUser = async (name) => {
         try {
             const response = await axios.post("http://localhost:8000/greet", { message: name });
             if (response.data.response) {
-                setTranscriptions((prev) => [
-                    ...prev,
-                    { username: "AI", text: response.data.response },
-                ]);
+                addTranscription("AI", response.data.response);
                 // Read the greeting aloud
                 readTextAloud(response.data.response);
             }
@@ -80,29 +84,37 @@ const Camera = ({ onRecognition }) => {
     const startSpeechRecognition = () => {
         if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
             console.error("Speech recognition is not supported in this browser.");
+            alert("Speech recognition is not supported in your browser.");
             return;
         }
     
-        // Avoid starting recognition if it's already running
         if (isRecognitionRunning) {
-            console.warn("Speech recognition is already running.");
+            console.warn("Recognition is already running.");
             return;
         }
     
-        const SpeechRecognition =
-            window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
-        recognition.lang = "en-US";
-        recognition.continuous = false;
-        recognition.interimResults = true;
+        recognition.lang = "en-US"; // Set language to English
+        recognition.continuous = true; // Allow continuous listening
+        recognition.interimResults = true; // Show interim results
     
         recognition.onstart = () => {
             console.log("Speech recognition started...");
-            isRecognitionRunning = true; // Set flag to true
             setListening(true);
+            isRecognitionRunning = true; // Set the flag
         };
     
-        recognition.onresult = (event) => {
+        recognition.onend = () => {
+            console.log("Speech recognition stopped.");
+            setListening(false);
+            if (isRecognitionRunning) {
+                console.warn("Unexpected recognition restart detected.");
+                isRecognitionRunning = false;
+            }
+        };
+    
+        recognition.onresult = async (event) => {
             let finalTranscript = "";
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
@@ -110,30 +122,16 @@ const Camera = ({ onRecognition }) => {
                     finalTranscript += transcript.trim();
                 }
             }
-            console.log("Final Transcript:", finalTranscript);
-    
+
             if (finalTranscript) {
-                updateTranscription(finalTranscript, "user"); // Use recognized name
-                handleApiResponse(finalTranscript); // Process transcript
+                addTranscription("user", finalTranscript);
+                await handleApiResponse(finalTranscript);
             }
-        };
-    
-        recognition.onend = () => {
-            console.log("Speech recognition stopped.");
-            isRecognitionRunning = false; // Reset flag
-            if (!window.speechSynthesis.speaking) {
-                setTimeout(() => {
-                    console.log("Restarting recognition...");
-                    startSpeechRecognition();
-                }, 500); // Debounce restart
-            }
-            setListening(false);
         };
     
         recognition.onerror = (event) => {
             console.error("Speech recognition error:", event.error);
-            isRecognitionRunning = false; // Reset flag
-            setListening(false);
+            isRecognitionRunning = false;
         };
     
         recognition.start();
@@ -196,7 +194,7 @@ const Camera = ({ onRecognition }) => {
                 console.log("API Response:", data.response);
     
                 // Add AI response to transcription list
-                updateTranscription(data.response, "ai");
+                addTranscription("AI", response.data.response);
 
                 // Read the response aloud
                 readTextAloud(data.response);
@@ -214,48 +212,52 @@ const Camera = ({ onRecognition }) => {
     };
 
     const readTextAloud = (text) => {
-        if ("speechSynthesis" in window) {
-            console.log("Pausing recognition for text-to-speech...");
-    
-            // Stop ongoing recognition temporarily
-            if (recognition) {
-                recognition.stop();
-            }
-    
-            // Configure speech synthesis
-            const utterance = new SpeechSynthesisUtterance(text);
-    
-            const voices = window.speechSynthesis.getVoices();
-            const preferredVoice = voices.find((voice) => voice.name === "Samantha");
-    
-            if (preferredVoice) {
-                utterance.voice = preferredVoice;
-            }
-    
-            utterance.rate = 1; // Normal speaking rate
-            utterance.pitch = 1; // Normal pitch
-            utterance.volume = 1; // Full volume
-    
-            utterance.onend = () => {
-                console.log("Text-to-speech finished. Resuming recognition...");
-                setTimeout(() => {
-                    if (recognition) {
-                        recognition.start();
-                    }
-                }, 500); // Small delay to ensure smooth transition
-            };
-    
-            utterance.onerror = (event) => {
-                console.error("Speech synthesis error:", event.error);
-                if (recognition) {
-                    recognition.start(); // Ensure recognition resumes even on error
-                }
-            };
-    
-            window.speechSynthesis.speak(utterance);
-        } else {
+        if (!("speechSynthesis" in window)) {
             console.error("Speech synthesis is not supported in this browser.");
+            return;
         }
+    
+        // Stop recognition while speaking to avoid interference
+        if (isRecognitionRunning) {
+            stopSpeechRecognition();
+        }
+    
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voices = window.speechSynthesis.getVoices();
+        const samanthaVoice = voices.find((voice) => voice.name === "Samantha");
+    
+        if (samanthaVoice) {
+            utterance.voice = samanthaVoice;
+        }
+    
+        utterance.rate = 1; // Normal speaking rate
+        utterance.pitch = 1; // Normal pitch
+        utterance.volume = 1; // Full volume
+    
+        utterance.onstart = () => {
+            console.log("Speech synthesis started.");
+            setTtsActive(true); // Indicate TTS is active
+        };
+    
+        utterance.onend = () => {
+            console.log("Speech synthesis finished.");
+            setTtsActive(false); // Indicate TTS is no longer active
+            // Restart recognition after speaking
+            if (!isRecognitionRunning) {
+                startSpeechRecognition();
+            }
+        };
+    
+        utterance.onerror = (event) => {
+            console.error("Speech synthesis error:", event.error);
+            setTtsActive(false); // Reset TTS state even on error
+            // Ensure recognition restarts in case of error
+            if (!isRecognitionRunning) {
+                startSpeechRecognition();
+            }
+        };
+    
+        window.speechSynthesis.speak(utterance);
     };
     // Update transcriptions dynamically with recognizedName
     const updateTranscription = (text, role = "user") => {
