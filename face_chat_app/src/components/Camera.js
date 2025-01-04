@@ -17,8 +17,10 @@ const Camera = ({ onRecognition }) => {
     const [username, setUsername] = useState("User"); // Placeholder for user identification
     const [ttsActive, setTtsActive] = useState(false); // Tracks if TTS is speaking
     let isRecognitionRunning = false; 
+    // Example: Update recognition logic
     const handleRecognition = async (imageFile) => {
         try {
+            console.log("Calling recognition API...");
             const formData = new FormData();
             formData.append("file", imageFile);
 
@@ -28,25 +30,27 @@ const Camera = ({ onRecognition }) => {
 
             const newName = response.data.name || "Unknown";
 
+            // Set recognizedName and update transcript after API call
+            console.log("In handleRecognition, ", recognizedName,newName )
             if (newName !== recognizedName) {
                 setRecognizedName(newName);
-                setUsername(newName);
 
+                // Greet user after recognition
                 if (newName !== "Unknown") {
-                    await greetUser(newName);
-                    recognizedName = newName
+                    await greetUser(newName); // Call greet API
                 }
             }
         } catch (error) {
-            console.error("Error recognizing face:", error);
+            console.error("Error in recognition:", error);
         }
     };
     const addTranscription = (role, text) => {
+        console.log("from addTranscrition, ", recognizedName)
         setTranscriptions((prev) => [
             ...prev,
-            { username: role === "user" ? recognizedName : "AI Model", text },
+            { username: role === "user" ? (recognizedName || "User") : "AI Model", text },
         ]);
-    };
+    };    
     const greetUser = async (name) => {
         try {
             const response = await axios.post("http://localhost:8000/greet", { message: name });
@@ -114,6 +118,7 @@ const Camera = ({ onRecognition }) => {
             }
         };
     
+        // Speech recognition result handling
         recognition.onresult = async (event) => {
             let finalTranscript = "";
             for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -123,9 +128,12 @@ const Camera = ({ onRecognition }) => {
                 }
             }
 
+            console.log("Final Transcript:", finalTranscript);
+
             if (finalTranscript) {
+                // Use `addTranscription` to reflect the recognizedName
                 addTranscription("user", finalTranscript);
-                await handleApiResponse(finalTranscript);
+                await handleApiResponse(finalTranscript); // Send user message to the AI model
             }
         };
     
@@ -259,16 +267,6 @@ const Camera = ({ onRecognition }) => {
     
         window.speechSynthesis.speak(utterance);
     };
-    // Update transcriptions dynamically with recognizedName
-    const updateTranscription = (text, role = "user") => {
-        setTranscriptions((prev) => [
-            ...prev,
-            {
-                username: role === "user" ? recognizedName || "User" : "AI Model",
-                text,
-            },
-        ]);
-    };
     const stopSpeaking = () => {
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel();
@@ -276,6 +274,12 @@ const Camera = ({ onRecognition }) => {
             console.log("Speech stopped.");
         }
     };
+    useEffect(() => {
+        console.log("Transcriptions updated:", transcriptions);
+    }, [transcriptions]);
+    useEffect(() => {
+        console.log("Recognized name updated:", recognizedName);
+    }, [recognizedName]);
     useEffect(() => {
         console.log("Camera component mounted.");
         return () => stopCameraAndMicrophone(); // Cleanup on unmount
