@@ -17,6 +17,8 @@ import torch
 from torchvision import transforms
 from PIL import Image
 from facenet_pytorch import InceptionResnetV1
+from typing import Dict, List
+
 app = FastAPI()
 if torch.backends.mps.is_available():
     device = torch.device("mps")  # Use Metal Performance Shaders for Apple Silicon
@@ -30,6 +32,9 @@ else:
 
 # Initialize the model
 model = InceptionResnetV1(pretrained="vggface2").eval().to(device)
+# Global data stores
+user_context: Dict[str, List[Dict[str, str]]] = {}  # Stores conversations for each user
+active_user: str = None  # Tracks the current active user
 
 preprocess = transforms.Compose([
     transforms.Resize((160, 160)),
@@ -45,11 +50,14 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 # Global conversation history
-conversation_history = []
-
 # Request model
 class MessageRequest(BaseModel):
     message: str
+# Helper function to add conversation
+def add_to_user_context(username: str, role: str, content: str):
+    if username not in user_context:
+        user_context[username] = []
+    user_context[username].append({"role": role, "content": content})
 
 @app.get("/")
 def read_root():
@@ -83,10 +91,14 @@ async def greet_user(request: MessageRequest):
     """
     Handles a user greeting and generates an AI response to start the conversation.
     """
-    global conversation_history
+    global active_user, conversation_history
 
     username = request.message
-
+    # Set the active user
+    active_user = username
+    # Initialize context for the user if not already there
+    if username not in user_context:
+        user_context[username] = []
     # Construct a personalized user message
     user_message = f"My name is {username}"
 
@@ -105,7 +117,7 @@ async def greet_user(request: MessageRequest):
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add conversation history to provide context
-    messages.extend(conversation_history)
+    # messages.extend(conversation_history)
 
     # Add the user's introduction
     messages.append({"role": "user", "content": user_message})
@@ -115,14 +127,16 @@ async def greet_user(request: MessageRequest):
         model = "mistral-nemo"  # Replace with your actual model name
         response = speak(messages, model)  # Call the speak function to get the AI response
         generated_message = response.get("content", "")
+        print(username, " in greet user")
 
-        # Add AI response to the conversation history
-        conversation_history.append({"role": "AI", "content": generated_message})
+       # Add AI response to the user context
+        add_to_user_context(username, "AI", generated_message)
 
         return {
             "response": generated_message,
-            "conversation_history": conversation_history,
+            "conversation_history": user_context[username],
         }
+
 
     except Exception as e:
         error_message = f"Error generating response: {str(e)}"
@@ -135,12 +149,15 @@ async def participant_response(request: MessageRequest):
     """
     Handles a user message and generates an AI response using conversation history as context.
     """
-    global conversation_history
+    global active_user, user_context
+    if not active_user:
+        raise HTTPException(status_code=400, detail="No active user set. Please call /greet first.")
 
     user_message = request.message
-
+    
+    print(active_user, " in participant response")
     # Add the user's message to the conversation history
-    conversation_history.append({"role": "user", "content": user_message})
+    add_to_user_context(active_user, "user", user_message)
 
     # Prepare system prompt
     system_prompt = (
@@ -156,7 +173,9 @@ async def participant_response(request: MessageRequest):
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add conversation history to the context
-    messages.extend(conversation_history)
+    # Add the active user's conversation history
+    messages.extend(user_context.get(active_user, []))
+
 
     # Add the current user message
     messages.append({"role": "user", "content": user_message})
@@ -167,18 +186,18 @@ async def participant_response(request: MessageRequest):
         response = speak(messages, model)  # Call the speak function
         generated_message = response.get("content", "")
 
-        # Add AI response to the conversation history
-        conversation_history.append({"role": "AI", "content": generated_message})
+       # Add AI response to the active user's conversation history
+        add_to_user_context(active_user, "AI", generated_message)
 
         return {
             "response": generated_message,
-            "conversation_history": conversation_history,
+            "conversation_history": user_context[active_user],
         }
 
     except Exception as e:
         error_message = f"Error generating response: {str(e)}"
         print(error_message)
-        conversation_history.append({"role": "system", "content": error_message})
+        add_to_user_context(active_user, "system", error_message)
         raise HTTPException(status_code=500, detail=error_message)
 
 @app.post("/recognize-face")
