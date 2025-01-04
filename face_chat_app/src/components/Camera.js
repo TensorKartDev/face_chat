@@ -10,11 +10,49 @@ const Camera = ({ onRecognition }) => {
     const [preview, setPreview] = useState(null); // Captured image preview
     const videoRef = useRef(null); // Reference to the <video> element
     const canvasRef = useRef(null); // Reference to the <canvas> element
+    const [recognizedName, setRecognizedName] = useState("");
     const mediaStreamRef = useRef(null); // Store the combined video/audio stream
     const [speaking, setSpeaking] = useState(false);
     const [listening, setListening] = useState(false); // Indicates if speech recognition is active
     const [username, setUsername] = useState("User"); // Placeholder for user identification
+    const handleRecognition = async (imageFile) => {
+        try {
+            const formData = new FormData();
+            formData.append("file", imageFile);
 
+            const response = await axios.post("http://localhost:8000/recognize-face", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+
+            const newName = response.data.name || "Unknown";
+
+            if (newName !== recognizedName) {
+                setRecognizedName(newName);
+                setUsername(newName);
+
+                if (newName !== "Unknown") {
+                    await greetUser(newName);
+                }
+            }
+        } catch (error) {
+            console.error("Error recognizing face:", error);
+        }
+    };
+    const greetUser = async (name) => {
+        try {
+            const response = await axios.post("http://localhost:8000/greet", { message: name });
+            if (response.data.response) {
+                setTranscriptions((prev) => [
+                    ...prev,
+                    { username: "AI", text: response.data.response },
+                ]);
+                // Read the greeting aloud
+                readTextAloud(response.data.response);
+            }
+        } catch (error) {
+            console.error("Error greeting the user:", error);
+        }
+    };
     const startCameraAndMicrophone = async () => {
         try {
             console.log("Requesting camera and microphone access...");
@@ -122,9 +160,7 @@ const Camera = ({ onRecognition }) => {
             canvas.toBlob((blob) => {
                 if (blob) {
                     const file = new File([blob], "captured-image.png", { type: "image/png" });
-                    onRecognition(file);
-                    // Update username after recognition (mock for now)
-                    setUsername("Identified User"); // Replace with actual user recognition logic
+                    handleRecognition(file);
                 }
             });
         }
@@ -277,7 +313,7 @@ const Camera = ({ onRecognition }) => {
                             cursor: "pointer",
                         }}
                     >
-                        Start Camera & Microphone
+                        <FaCamera /> Start Camera, <FaMicrophone /> Microphone
                     </button>
                 )}
                 
@@ -297,7 +333,7 @@ const Camera = ({ onRecognition }) => {
                 {streaming && (
                     <div style={{ marginTop: "10px" }}>
                         <button onClick={captureImage} style={{ marginRight: "10px" }}>
-                            Capture Image
+                        <FaCamera />Capture Image
                         </button>
                         <button onClick={stopCameraAndMicrophone}>Stop Camera</button>
                         <button onClick={stopSpeaking} disabled={!speaking}>

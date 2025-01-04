@@ -78,6 +78,58 @@ async def preflight_options():
 # Global conversation history
 conversation_history = []
 
+@app.post("/greet")
+async def greet_user(request: MessageRequest):
+    """
+    Handles a user greeting and generates an AI response to start the conversation.
+    """
+    global conversation_history
+
+    username = request.message
+
+    # Construct a personalized user message
+    user_message = f"My name is {username}"
+
+    # Prepare the updated system prompt
+    system_prompt = (
+        "You are a warm and engaging conversationalist at a friendly gathering. "
+        "You have just been introduced to someone new, and your goal is to start a meaningful and enjoyable conversation. "
+        f"Begin by warmly greeting the person using their name, in this case {username}, making them feel welcome and valued. "
+        "Show genuine curiosity and interest in their background, hobbies, or recent experiences to establish a connection. "
+        "Your responses should be relatable, insightful, and human-like, fostering a comfortable and natural interaction. "
+        "Maintain continuity by remembering details from the conversation history, but avoid sounding overly formal or robotic. "
+        "Prioritize building rapport and creating a memorable and engaging exchange that encourages the person to continue talking."
+    )
+
+    # Construct the message structure
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history to provide context
+    messages.extend(conversation_history)
+
+    # Add the user's introduction
+    messages.append({"role": "user", "content": user_message})
+
+    try:
+        # Call the AI model
+        model = "mistral-nemo"  # Replace with your actual model name
+        response = speak(messages, model)  # Call the speak function to get the AI response
+        generated_message = response.get("content", "")
+
+        # Add AI response to the conversation history
+        conversation_history.append({"role": "AI", "content": generated_message})
+
+        return {
+            "response": generated_message,
+            "conversation_history": conversation_history,
+        }
+
+    except Exception as e:
+        error_message = f"Error generating response: {str(e)}"
+        print(error_message)
+        conversation_history.append({"role": "system", "content": error_message})
+        raise HTTPException(status_code=500, detail=error_message)
+    
 @app.post("/participant-response")
 async def participant_response(request: MessageRequest):
     """
