@@ -15,6 +15,8 @@ const Camera = ({ onRecognition }) => {
     const [speaking, setSpeaking] = useState(false);
     const [listening, setListening] = useState(false); // Indicates if speech recognition is active
     const [username, setUsername] = useState("User"); // Placeholder for user identification
+    const [ttsActive, setTtsActive] = useState(false); // Tracks if TTS is speaking
+    let isRecognitionRunning = false; 
     const handleRecognition = async (imageFile) => {
         try {
             const formData = new FormData();
@@ -78,24 +80,29 @@ const Camera = ({ onRecognition }) => {
     const startSpeechRecognition = () => {
         if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
             console.error("Speech recognition is not supported in this browser.");
-            alert("Speech recognition is not supported in your browser.");
             return;
         }
-
-        // Initialize SpeechRecognition
+    
+        // Avoid starting recognition if it's already running
+        if (isRecognitionRunning) {
+            console.warn("Speech recognition is already running.");
+            return;
+        }
+    
         const SpeechRecognition =
             window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
-        recognition.lang = "en-US"; // Set language to English
-        recognition.continuous = false; // Automatically stop after each phrase
-        recognition.interimResults = true; // Show interim results
-
+        recognition.lang = "en-US";
+        recognition.continuous = false;
+        recognition.interimResults = true;
+    
         recognition.onstart = () => {
             console.log("Speech recognition started...");
+            isRecognitionRunning = true; // Set flag to true
             setListening(true);
         };
-
-        recognition.onresult = async (event) => {
+    
+        recognition.onresult = (event) => {
             let finalTranscript = "";
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
@@ -104,23 +111,31 @@ const Camera = ({ onRecognition }) => {
                 }
             }
             console.log("Final Transcript:", finalTranscript);
-
+    
             if (finalTranscript) {
-                setTranscriptions((prev) => [...prev, { username, text: finalTranscript }]); // Add user transcription
-                await handleApiResponse(finalTranscript); // Send to API and handle response
+                updateTranscription(finalTranscript, "user"); // Use recognized name
+                handleApiResponse(finalTranscript); // Process transcript
             }
         };
-
+    
+        recognition.onend = () => {
+            console.log("Speech recognition stopped.");
+            isRecognitionRunning = false; // Reset flag
+            if (!window.speechSynthesis.speaking) {
+                setTimeout(() => {
+                    console.log("Restarting recognition...");
+                    startSpeechRecognition();
+                }, 500); // Debounce restart
+            }
+            setListening(false);
+        };
+    
         recognition.onerror = (event) => {
             console.error("Speech recognition error:", event.error);
-        };
-
-        recognition.onend = () => {
-            console.log("Speech recognition stopped. Restarting...");
+            isRecognitionRunning = false; // Reset flag
             setListening(false);
-            startSpeechRecognition(); // Restart recognition
         };
-
+    
         recognition.start();
     };
 
@@ -181,11 +196,8 @@ const Camera = ({ onRecognition }) => {
                 console.log("API Response:", data.response);
     
                 // Add AI response to transcription list
-                setTranscriptions((prev) => [
-                    ...prev,
-                    { username: "AI Model", text: data.response },
-                ]);
-    
+                updateTranscription(data.response, "ai");
+
                 // Read the response aloud
                 readTextAloud(data.response);
             }
@@ -203,36 +215,57 @@ const Camera = ({ onRecognition }) => {
 
     const readTextAloud = (text) => {
         if ("speechSynthesis" in window) {
-            // Stop any ongoing speech synthesis
-            window.speechSynthesis.cancel();
+            console.log("Pausing recognition for text-to-speech...");
     
-            const utterance = new SpeechSynthesisUtterance(text);
-    
-            // Find Samantha's voice
-            const voices = window.speechSynthesis.getVoices();
-            const samanthaVoice = voices.find((voice) => voice.name === "Samantha");
-    
-            if (samanthaVoice) {
-                utterance.voice = samanthaVoice;
-                console.log("Using Samantha's voice.");
-            } else {
-                console.warn("Samantha's voice not found. Using the default voice.");
+            // Stop ongoing recognition temporarily
+            if (recognition) {
+                recognition.stop();
             }
     
-            // Speak the text
+            // Configure speech synthesis
+            const utterance = new SpeechSynthesisUtterance(text);
+    
+            const voices = window.speechSynthesis.getVoices();
+            const preferredVoice = voices.find((voice) => voice.name === "Samantha");
+    
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+    
             utterance.rate = 1; // Normal speaking rate
             utterance.pitch = 1; // Normal pitch
             utterance.volume = 1; // Full volume
     
-            // Event listeners for debugging and feedback
-            utterance.onstart = () => console.log("Speech started.");
-            utterance.onend = () => console.log("Speech ended.");
-            utterance.onerror = (event) => console.error("Speech synthesis error:", event.error);
+            utterance.onend = () => {
+                console.log("Text-to-speech finished. Resuming recognition...");
+                setTimeout(() => {
+                    if (recognition) {
+                        recognition.start();
+                    }
+                }, 500); // Small delay to ensure smooth transition
+            };
+    
+            utterance.onerror = (event) => {
+                console.error("Speech synthesis error:", event.error);
+                if (recognition) {
+                    recognition.start(); // Ensure recognition resumes even on error
+                }
+            };
     
             window.speechSynthesis.speak(utterance);
         } else {
-            console.error("Speech synthesis not supported in this browser.");
+            console.error("Speech synthesis is not supported in this browser.");
         }
+    };
+    // Update transcriptions dynamically with recognizedName
+    const updateTranscription = (text, role = "user") => {
+        setTranscriptions((prev) => [
+            ...prev,
+            {
+                username: role === "user" ? recognizedName || "User" : "AI Model",
+                text,
+            },
+        ]);
     };
     const stopSpeaking = () => {
         if ("speechSynthesis" in window) {
