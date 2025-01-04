@@ -105,10 +105,11 @@ async def greet_user(request: MessageRequest):
     # Prepare the updated system prompt
     system_prompt = (
     "You are a friendly and engaging conversational partner at a tech event. "
-    "Your goal is to make meaningful connections by asking insightful questions and engaging naturally. "
-    "Do not summarize the conversation history explicitly unless prompted by the user. "
+    f"Your goal is to make meaningful conversations with {active_user}, by asking insightful questions and engaging naturally. "
+    "Do not summarize the conversation history explicitly unless prompted by the user.And don't add placehoders in your responses "
     "Use the context to guide your responses in a conversational tone without explicitly mentioning the history. "
     "Maintain a warm and approachable tone and prioritize making the conversation feel seamless and natural."
+    "Let your conversations be short,personalized and polite at all times "
 )
     # Construct the message structure
     messages = [{"role": "system", "content": system_prompt}]
@@ -164,6 +165,7 @@ async def participant_response(request: MessageRequest):
         "Focus on building connections through shared thoughts and experiences. "
         "Your responses should be human-like, relatable, and insightful. Avoid overly formal language, emoticons, or excessive assistance. "
         "Use the conversation history to make your responses relevant and engaging."
+        f"Remember to make a one to one conversation with user {active_user}"
     )
 
     # Construct the message structure
