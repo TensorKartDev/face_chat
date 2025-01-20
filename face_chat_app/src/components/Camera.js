@@ -34,7 +34,7 @@ const Camera = ({ onRecognition }) => {
             console.log("In handleRecognition, ", recognizedName,newName )
             if (newName !== recognizedName) {
                 setRecognizedName(newName);
-
+                console.log(newName)
                 // Greet user after recognition
                 if (newName !== "Unknown") {
                     await greetUser(newName); // Call greet API

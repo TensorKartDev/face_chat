@@ -44,7 +44,7 @@ preprocess = transforms.Compose([
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3002", "http://127.0.0.1:3002"],  # Allow the React frontend origin
+    allow_origins=["http://localhost:3002", "http://127.0.0.1:3001"],  # Allow the React frontend origin
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
